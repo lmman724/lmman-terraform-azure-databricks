@@ -28,19 +28,6 @@ resource "azurerm_databricks_workspace" "workspace" {
 #   long_term_support = true
 # }
 
-# resource "databricks_instance_pool" "pool" {
-#   instance_pool_name = "CodeRedPool"
-#   min_idle_instances = 0
-#   max_capacity       = 10
-#   node_type_id       = data.databricks_node_type.smallest.id
-
-#   idle_instance_autotermination_minutes = 10
-#   depends_on = [
-#     azurerm_databricks_workspace.workspace,
-#     data.databricks_node_type.smallest
-#   ]
-# }
-
 # resource "databricks_cluster" "single_node" {
 #   depends_on              = [azurerm_databricks_workspace.workspace]
 #   cluster_name            = "lmman_single_node_cluster"
@@ -50,12 +37,6 @@ resource "azurerm_databricks_workspace" "workspace" {
 #   autotermination_minutes = 20
 #   spark_conf = {"spark.databricks.io.cache.enabled" : true}
 # }
-#   tags = {
-#     "createdby"    = "lmman"
-#     "environment"  = "dev"
-#     "project"      = "my-project"
-#   }
-# }
 
 resource "azurerm_storage_account" "storage" {
   name                     = "lmmanstorageaccountdev"
@@ -63,6 +44,8 @@ resource "azurerm_storage_account" "storage" {
   resource_group_name      = azurerm_resource_group.resourcegroup.name
   account_tier             = "Standard"
   account_replication_type = "LRS"
+  account_kind             = "StorageV2"
+  is_hns_enabled           = true
 
   tags = {
     environment = "dev"
@@ -73,4 +56,27 @@ resource "azurerm_storage_container" "container" {
   name                  = "lmmancontainer"
   storage_account_name  = azurerm_storage_account.storage.name
   container_access_type = "private"
+}
+
+resource "azurerm_storage_data_lake_gen2_filesystem" "filesystem" {
+  name               = "filesystem"
+  storage_account_id = azurerm_storage_account.storage.id
+}
+
+# Create a Synapse workspace
+resource "azurerm_synapse_workspace" "synapse_ws" {
+  name                = "lmman-synapse-workspace"
+  location                 = azurerm_resource_group.resourcegroup.location
+  resource_group_name      = azurerm_resource_group.resourcegroup.name
+storage_data_lake_gen2_filesystem_id = azurerm_storage_data_lake_gen2_filesystem.filesystem.id
+  sql_administrator_login          = "synapseadmin"
+  sql_administrator_login_password = "Password1234!" # Replace this with a strong password
+
+  tags = {
+    environment = "dev"
+  }
+  # Link an existing managed identity to the Synapse workspace for managed resource access
+  identity {
+    type = "SystemAssigned"
+  }
 }
